@@ -43,13 +43,25 @@ def validate_schema(sample: dict) -> "list[str]":
         errors.append(f"Missing fields: {missing}")
     if sample.get("task") not in VALID_TASKS:
         errors.append(f"Invalid task: {sample.get('task')}")
-    if len(sample.get("output", "")) < 10:
+    if len(text_value(sample.get("output", ""))) < 10:
         errors.append("Output too short (< 10 chars)")
     return errors
 
 
+def text_value(value) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        if isinstance(value.get("text"), str):
+            return value["text"]
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return "" if value is None else str(value)
+
+
 def content_hash(sample: dict) -> str:
-    key = f"{sample.get('instruction', '')}|{sample.get('input', '')}".lower()
+    key = f"{text_value(sample.get('instruction', ''))}|{text_value(sample.get('input', ''))}".lower()
     return hashlib.md5(key.encode()).hexdigest()
 
 
@@ -74,7 +86,7 @@ def validate_file(corpus_path: Path, splits_dir: Path):
             if errors:
                 schema_errors.append((sample.get("id", f"line_{i}"), errors))
 
-            if pii_check(sample.get("input", "") + sample.get("output", "")):
+            if pii_check(text_value(sample.get("input", "")) + " " + text_value(sample.get("output", ""))):
                 pii_flagged.append(sample.get("id", f"line_{i}"))
 
             all_samples.append(sample)
@@ -95,14 +107,14 @@ def validate_file(corpus_path: Path, splits_dir: Path):
     for s in all_samples:
         h = content_hash(s)
         if h not in seen_hashes:
-            seen_hashes[h] = s["id"]
+            seen_hashes[h] = s.get("id", f"hash_{h}")
             deduped.append(s)
     log.info(f"After dedup: {len(deduped)} samples (removed {len(all_samples) - len(deduped)} duplicates)")
 
     # Contradiction check: same input → different outputs
     input_to_outputs: dict[str, list] = defaultdict(list)
     for s in deduped:
-        input_to_outputs[s.get("input", "")[:200]].append(s.get("output", "")[:100])
+        input_to_outputs[text_value(s.get("input", ""))[:200]].append(text_value(s.get("output", ""))[:100])
     contradictions = {k: v for k, v in input_to_outputs.items() if len(set(v)) > 1}
     if contradictions:
         log.warning(f"Possible contradictions in {len(contradictions)} input groups")

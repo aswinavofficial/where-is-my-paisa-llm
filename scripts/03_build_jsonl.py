@@ -46,6 +46,15 @@ SMS_TEMPLATES = [
     "Dear Customer, Rs.{amount} debited from A/c XX{acct} on {date} at {merchant}. Avl Bal INR {bal}",
 ]
 
+DEFAULT_INSTRUCTIONS = {
+    "txn_categorization": "Categorize this Indian bank transaction SMS and extract key details.",
+    "insight_narration": "Generate concise monthly finance insights from the provided data.",
+    "budget_coaching": "Provide practical budget coaching advice based on the user's spending profile.",
+    "anomaly_explanation": "Explain why this transaction pattern is unusual and suggest next steps.",
+    "goal_coaching": "Coach the user on progress toward their savings goal with actionable guidance.",
+    "safety_refusal": "Politely refuse unsafe financial requests and suggest a safe alternative.",
+}
+
 
 def synthetic_txn() -> dict:
     cat = random.choice(list(SYNTHETIC_MERCHANTS.keys()))
@@ -74,13 +83,42 @@ def synthetic_txn() -> dict:
     }
 
 
+def prompt_input_text(input_value) -> str:
+    if isinstance(input_value, str):
+        return input_value
+    if isinstance(input_value, dict):
+        context = input_value.get("context", "")
+        structured = input_value.get("structured", {})
+        if context and structured:
+            return f"{context}\nStructured:\n{json.dumps(structured, ensure_ascii=False)}"
+        if context:
+            return str(context)
+        return json.dumps(structured or input_value, ensure_ascii=False)
+    if isinstance(input_value, list):
+        return json.dumps(input_value, ensure_ascii=False)
+    return "" if input_value is None else str(input_value)
+
+
+def prompt_output_text(output_value) -> str:
+    if isinstance(output_value, str):
+        return output_value
+    if isinstance(output_value, dict):
+        if isinstance(output_value.get("text"), str):
+            return output_value["text"]
+        return json.dumps(output_value, ensure_ascii=False)
+    if isinstance(output_value, list):
+        return json.dumps(output_value, ensure_ascii=False)
+    return "" if output_value is None else str(output_value)
+
+
 def format_alpaca(sample: dict, eos_token: str = "</s>") -> dict:
+    instruction = sample.get("instruction") or DEFAULT_INSTRUCTIONS.get(sample.get("task", ""), "Answer the finance task accurately.")
     text = ALPACA_PROMPT.format(
-        sample.get("instruction", ""),
-        sample.get("input", ""),
-        sample.get("output", ""),
+        instruction,
+        prompt_input_text(sample.get("input", "")),
+        prompt_output_text(sample.get("output", "")),
     ) + eos_token
-    return {**sample, "text": text}
+    return {**sample, "instruction": instruction, "text": text}
 
 
 def build_corpus(deid_dir: Path, output_dir: Path, synthetic_count: int = 5000):

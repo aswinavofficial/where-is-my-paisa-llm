@@ -62,15 +62,32 @@ class Deidentifier:
 
         return result, entity_map
 
+    def deidentify_value(self, value, deid: "Deidentifier"):
+        if isinstance(value, str):
+            return deid.deidentify(value)[0]
+        if isinstance(value, dict):
+            return {k: self.deidentify_value(v, deid) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self.deidentify_value(v, deid) for v in value]
+        return value
+
     def deidentify_sample(self, sample: dict) -> dict:
         deid = Deidentifier()
-        deid_input, map1 = deid.deidentify(sample.get("input", ""))
-        deid_output, map2 = deid.deidentify(sample.get("output", ""))
         result = dict(sample)
-        result["input"] = deid_input
-        result["output"] = deid_output
+        result["input"] = self.deidentify_value(sample.get("input", ""), deid)
+        result["output"] = self.deidentify_value(sample.get("output", ""), deid)
         result.setdefault("metadata", {})["deid_applied"] = True
         return result
+
+
+def to_scan_text(value) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    if value is None:
+        return ""
+    return str(value)
 
 
 def process_file(input_path: Path, output_path: Path) -> "tuple[int, int]":
@@ -81,11 +98,11 @@ def process_file(input_path: Path, output_path: Path) -> "tuple[int, int]":
     with open(input_path) as fin, open(output_path, "w") as fout:
         for line in fin:
             sample = json.loads(line)
-            original_input = sample.get("input", "")
             result = deid.deidentify_sample(sample)
 
             # Leak check: warn if raw PII patterns still present in output
-            remaining_pii = any(p.search(result["input"]) for p in PATTERNS.values())
+            scan_text = to_scan_text(result.get("input", "")) + " " + to_scan_text(result.get("output", ""))
+            remaining_pii = any(p.search(scan_text) for p in PATTERNS.values())
             if remaining_pii:
                 log.warning(f"Potential residual PII in sample {sample.get('id', '?')}")
                 flagged += 1
