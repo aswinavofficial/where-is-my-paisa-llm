@@ -62,13 +62,13 @@ class Deidentifier:
 
         return result, entity_map
 
-    def deidentify_value(self, value, deid: "Deidentifier"):
+    def deidentify_value(self, value, deidentifier: "Deidentifier"):
         if isinstance(value, str):
-            return deid.deidentify(value)[0]
+            return deidentifier.deidentify(value)[0]
         if isinstance(value, dict):
-            return {k: self.deidentify_value(v, deid) for k, v in value.items()}
+            return {k: self.deidentify_value(v, deidentifier) for k, v in value.items()}
         if isinstance(value, list):
-            return [self.deidentify_value(v, deid) for v in value]
+            return [self.deidentify_value(v, deidentifier) for v in value]
         return value
 
     def deidentify_sample(self, sample: dict) -> dict:

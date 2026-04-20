@@ -104,10 +104,10 @@ def validate_file(corpus_path: Path, splits_dir: Path):
     # Dedup by content hash
     seen_hashes: dict[str, str] = {}
     deduped = []
-    for s in all_samples:
+    for idx, s in enumerate(all_samples, 1):
         h = content_hash(s)
         if h not in seen_hashes:
-            seen_hashes[h] = s.get("id", f"hash_{h}")
+            seen_hashes[h] = s.get("id", f"unknown_{idx}")
             deduped.append(s)
     log.info(f"After dedup: {len(deduped)} samples (removed {len(all_samples) - len(deduped)} duplicates)")
 

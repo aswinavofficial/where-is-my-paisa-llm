@@ -112,7 +112,8 @@ def prompt_output_text(output_value) -> str:
 
 
 def format_alpaca(sample: dict, eos_token: str = "</s>") -> dict:
-    instruction = sample.get("instruction") or DEFAULT_INSTRUCTIONS.get(sample.get("task", ""), "Answer the finance task accurately.")
+    task = sample.get("task", "")
+    instruction = sample.get("instruction") or DEFAULT_INSTRUCTIONS.get(task, f"Complete the '{task or 'finance'}' task accurately and safely.")
     text = ALPACA_PROMPT.format(
         instruction,
         prompt_input_text(sample.get("input", "")),
